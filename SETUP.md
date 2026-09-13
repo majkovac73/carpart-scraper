@@ -199,10 +199,18 @@ You get a `https://xxxx.ngrok.app` link. Good for testing Telegram links / phone
 2. Create a Web Service from the repo.
 3. Build command: `pip install -r requirements.txt && playwright install chromium`
 4. Start command: `python website.py --host 0.0.0.0 --port $PORT`
-5. **Persistent database** (required, otherwise data resets each deploy):
-   - Render: Add a Disk mounted at `/var/data`; add env
-     `SQLALCHEMY_DATABASE_URL=sqlite:////var/data/deals.db`
-   - Railway: attach a Volume at `/data`, same env with `/data/deals.db`.
+5. **Persistent database** — Render's free plan has **no disks**, so data
+   resets every deploy if you keep the SQLite file. Use a free hosted Postgres:
+   - Create a free **Neon** project (neon.tech → New project → pick a region) and copy the connection string.
+   - Add a Render **Environment Variable**:
+     `SQLALCHEMY_DATABASE_URL = postgresql+psycopg://USER:PASS@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`
+     (note the **`+psycopg`** right after `postgresql` — required by the psycopg driver).
+   - Push your local data to it once (idempotent, re-run anytime to publish new deals):
+     ```powershell
+     $env:SQLALCHEMY_DATABASE_URL = "postgresql+psycopg://USER:PASS@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
+     python sync_to_remote.py
+     ```
+   - Alternative: run the local pipeline (`main.py`) with the same env var, so new deals are written straight to the hosted DB and appear on the site immediately — no manual sync needed.
 6. Create the free instance. Done — the site is public.
 
 > The scraper (`main.py`) stays local or on a small host; the website only

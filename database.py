@@ -5,9 +5,15 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL", "sqlite:///./deals.db")
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+# SQLite (local dev): needs check_same_thread for FastAPI's threadpool.
+# Postgres (Render/Neon etc.): keep connections resilient on shared hosts.
+_is_sqlite = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+if _is_sqlite:
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    )
+else:
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -63,7 +69,11 @@ Base.metadata.create_all(bind=engine)
 
 
 def _ensure_columns(engine, table, columns):
-    """Lightweight migration: adds missing columns to an existing table."""
+    """Lightweight migration: adds missing columns to an existing table.
+    SQLite-only helper (uses PRAGMA); Postgres/other hosts get full schemas
+    via create_all above, so nothing to do there."""
+    if not str(engine.url).startswith("sqlite"):
+        return
     with engine.connect() as conn:
         existing = {
             row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))
