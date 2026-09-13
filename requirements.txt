@@ -11,6 +11,9 @@ google-genai>=1.0
 python-telegram-bot>=21.0
 
 # Phase 5 - Website archive (FastAPI + Jinja2)
+# starlette<1.0.0 is REQUIRED: Starlette 1.0 changed TemplateResponse and
+# breaks our Jinja2Templates calls (see fastapi#15197). Keep it pinned.
 fastapi>=0.115
+starlette>=0.41,<1.0.0
 uvicorn>=0.30
-jinja2>=3.1
+jinja2>=3.1,<3.2
