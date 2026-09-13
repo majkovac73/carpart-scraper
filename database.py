@@ -1,7 +1,9 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Table
+import os
+
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Table, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./deals.db"
+SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL", "sqlite:///./deals.db")
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
@@ -43,10 +45,13 @@ class Deal(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(String, unique=True, index=True, nullable=False) 
     title = Column(String, nullable=False)
+    title_en = Column(String, nullable=True)
     retail_price = Column(Float, nullable=True)
     sale_price = Column(Float, nullable=False)
     discount_percentage = Column(Float, nullable=False)
+    average_price = Column(Float, nullable=True)
     image_url = Column(String, nullable=True)
+    source_url = Column(String, nullable=True)
     affiliate_link = Column(String, nullable=True)
     status = Column(String, default="pending") 
     
@@ -55,3 +60,25 @@ class Deal(Base):
 
 # Create all tables automatically
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_columns(engine, table, columns):
+    """Lightweight migration: adds missing columns to an existing table."""
+    with engine.connect() as conn:
+        existing = {
+            row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))
+        }
+        for name, ddl in columns.items():
+            if name not in existing:
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+
+_ensure_columns(engine, "deals", {
+    "average_price": "average_price FLOAT",
+    "source_url": "source_url VARCHAR(1000)",
+    "title_en": "title_en VARCHAR(1000)",
+})

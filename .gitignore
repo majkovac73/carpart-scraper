@@ -1,1 +1,7 @@
 .env
+deals.db
+deals.db-journal
+__pycache__/
+debug/
+.venv/
+venv/

@@ -1,0 +1,16 @@
+# Core pipeline
+playwright>=1.47
+sqlalchemy>=2.0
+requests>=2.32
+python-dotenv>=1.0
+
+# Phase 3.1 - LLM cleaning (optional: falls back to offline extractor without a key)
+google-genai>=1.0
+
+# Phase 5 - Telegram distribution (used once bots are wired)
+python-telegram-bot>=21.0
+
+# Phase 5 - Website archive (FastAPI + Jinja2)
+fastapi>=0.115
+uvicorn>=0.30
+jinja2>=3.1

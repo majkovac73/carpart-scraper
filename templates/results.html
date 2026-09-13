@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>{{ heading }}</h1>
+  <form class="search" action="/search" method="get">
+    <select name="brand" id="brand">
+      <option value="">Brand (all)</option>
+      {% for b in brands %}
+      <option value="{{ b.name }}" {% if selected_brand == b.name %}selected{% endif %}>{{ b.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="model" id="model">
+      <option value="">Model (all)</option>
+      {% for m in models %}
+      <option value="{{ m.name }}" {% if selected_model == m.name %}selected{% endif %}>{{ m.name }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="q" value="{{ selected_q }}" placeholder="Enter a part, e.g. brake disc…">
+    <button type="submit">Search</button>
+  </form>
+</div>
+
+<h2>{{ deals|length }} result{% if deals|length != 1 %}s{% endif %}</h2>
+{% include "_deals.html" %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const brandSel = document.getElementById('brand');
+  const modelSel = document.getElementById('model');
+  const fillModels = async (brand) => {
+    if (!brand) { modelSel.innerHTML = '<option value="">Model (all)</option>'; return; }
+    const keep = modelSel.value;
+    const res = await fetch('/api/models?brand=' + encodeURIComponent(brand));
+    const models = await res.json();
+    modelSel.innerHTML = '<option value="">Model (all)</option>';
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      if (m.name === keep) opt.selected = true;
+      modelSel.appendChild(opt);
+    }
+  };
+  fillModels(brandSel.value);
+  brandSel.addEventListener('change', async (e) => await fillModels(e.target.value));
+</script>
+{% endblock %}

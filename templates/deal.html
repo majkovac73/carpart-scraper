@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ deal.title|en if deal else 'Not found' }}{% endblock %}
+{% block content %}
+
+{% if not deal %}
+  <div class="empty">Deal not found.</div>
+{% else %}
+<div class="detail">
+  {% if deal.image_url %}
+  <div class="imgbox"><img src="{{ deal.image_url }}" onerror="this.parentElement.style.display='none'" alt=""></div>
+  {% endif %}
+
+  <div>
+    <span class="badge">{% if deal.discount_percentage %}⚠ −{{ deal.discount_percentage }}% below market average{% else %}Lowest price found{% endif %}</span>
+    <h1 style="font-size:22px;margin:8px 0">{{ deal.title|en|car(deal.compatible_models) }}</h1>
+
+    <div class="price-big">{{ deal.sale_price|eur }} €</div>
+    <div class="meta">
+      {% if deal.average_price %}Market average: <b>{{ deal.average_price|eur }} €</b><br>{% endif %}
+      {% if deal.retail_price and deal.retail_price > deal.sale_price %}RRP: {{ deal.retail_price|eur }} €<br>{% endif %}
+      Status: {{ deal.status }}<br>
+      Source: {{ deal.product_id }}
+    </div>
+
+    {% if deal.compatible_models %}
+    <div class="label">Fits</div>
+    <div class="veh">
+      {% for m in deal.compatible_models %}<span class="chip">{{ m.brand.name }} {{ m.name }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if deal.source_url or deal.affiliate_link %}
+    <a class="btn" href="{{ deal.affiliate_link or deal.source_url }}" target="_blank" rel="noopener">View deal ↗</a>
+    {% endif %}
+
+    <div class="label">Telegram format</div>
+    <pre class="preview">{{ message }}</pre>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

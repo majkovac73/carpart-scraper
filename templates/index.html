@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hero">
+  <h1>Car part deals for your car</h1>
+  <p>Search parts for your specific car brand and model – the best prices compared to the market average.</p>
+  <form class="search" action="/search" method="get">
+    <select name="brand" id="brand">
+      <option value="">Brand (all)</option>
+      {% for b in brands %}<option value="{{ b.name }}">{{ b.name }}</option>{% endfor %}
+    </select>
+    <select name="model" id="model">
+      <option value="">Model (all)</option>
+    </select>
+    <input type="text" name="q" placeholder="Enter a part, e.g. brake disc, oil filter, brake pads…">
+    <button type="submit">Search</button>
+  </form>
+</div>
+
+<h2>Latest deals</h2>
+{% include "_deals.html" %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const brandSel = document.getElementById('brand');
+  const modelSel = document.getElementById('model');
+  brandSel.addEventListener('change', async (e) => {
+    modelSel.innerHTML = '<option value="">Model (all)</option>';
+    const brand = e.target.value;
+    if (!brand) return;
+    const res = await fetch('/api/models?brand=' + encodeURIComponent(brand));
+    const models = await res.json();
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      modelSel.appendChild(opt);
+    }
+  });
+</script>
+{% endblock %}

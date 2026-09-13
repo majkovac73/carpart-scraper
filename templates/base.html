@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}TrackDeals EU – Car Part Deals{% endblock %}</title>
+<style>
+  :root{--bg:#0f1115;--card:#1a1e26;--text:#e7e9ee;--muted:#9aa2b1;--accent:#ffca28;--green:#34d399;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  a{color:inherit}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+  nav{display:flex;gap:20px;align-items:center;padding:14px 0;border-bottom:1px solid #232936}
+  nav .logo{font-weight:800;color:var(--accent);font-size:17px}
+  nav a{text-decoration:none;color:var(--muted);font-size:14px}
+  nav a:hover{color:var(--text)}
+  nav a.active{color:var(--text)}
+  .liveoverlay{position:fixed;inset:0;background:rgba(15,17,21,.75);display:flex;align-items:center;justify-content:center;z-index:50}
+  .livebox{background:var(--card);border:1px solid #2c3547;border-radius:12px;padding:26px 32px;text-align:center;max-width:340px}
+  .livebox strong{display:block;font-size:16px;margin-bottom:6px}
+  .livebox small{color:var(--muted)}
+  .hero{padding:38px 0 22px}
+  h1{margin:0 0 8px;font-size:26px}
+  .hero p{color:var(--muted);margin:0 0 18px}
+  form.search{display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:10px;max-width:860px}
+  @media(max-width:740px){form.search{grid-template-columns:1fr}}
+  select,input[type=text]{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #2c3547;background:#141824;color:var(--text);font-size:15px}
+  button{padding:11px 20px;border:0;border-radius:8px;background:var(--accent);color:#17180f;font-weight:700;cursor:pointer;font-size:15px;white-space:nowrap}
+  h2{margin:30px 0 4px;font-size:19px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin:18px 0}
+  a.card{background:var(--card);border:1px solid #232936;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;text-decoration:none;transition:border-color .15s}
+  a.card:hover{border-color:#3a465e}
+  .card .imgbox{background:#fff;height:180px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .card img{max-width:100%;max-height:180px;object-fit:contain}
+  .card .body{padding:14px;display:flex;flex-direction:column;flex:1}
+  .badge{align-self:flex-start;background:rgba(52,211,153,.15);color:var(--green);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;margin-bottom:8px}
+  .card h3{margin:0 0 8px;font-size:15px;line-height:1.35;font-weight:600}
+  .price{font-size:20px;font-weight:800}
+  .price small{font-size:12px;color:var(--muted);font-weight:400}
+  .o{margin:4px 0 0;font-size:13px;color:var(--muted)}
+  .veh{margin-top:12px;font-size:12px;color:var(--muted)}
+  .chip{display:inline-block;background:#242b3a;border-radius:6px;padding:2px 8px;margin:2px 2px 0 0}
+  .empty{color:var(--muted);padding:26px 0}
+  footer{margin:34px 0 0;color:var(--muted);font-size:12px;border-top:1px solid #232936;padding:14px 0}
+  .detail{display:grid;grid-template-columns:minmax(260px,440px) 1fr;gap:26px;padding:26px 0}
+  @media(max-width:740px){.detail{grid-template-columns:1fr}}
+  .detail .imgbox{background:#fff;border-radius:12px;padding:18px;display:flex;align-items:center;justify-content:center}
+  .detail img{max-width:100%;max-height:320px;object-fit:contain}
+  .price-big{font-size:32px;font-weight:800;margin:10px 0}
+  .meta{color:var(--muted);font-size:14px;line-height:1.8}
+  .btn{display:inline-block;padding:12px 22px;background:var(--accent);color:#17180f;border-radius:9px;font-weight:700;text-decoration:none;margin-top:14px}
+  pre.preview{background:#141824;border:1px solid #2c3547;border-radius:10px;padding:14px;white-space:pre-wrap;font-family:inherit;line-height:1.6;color:var(--text);max-width:520px}
+  .label{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:18px 0 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <span class="logo">🔧 TrackDeals EU</span>
+    <a href="/" {% if page == 'home' %}class="active"{% endif %}>Home</a>
+    <a href="/deals" {% if page == 'deals' %}class="active"{% endif %}>Good deals</a>
+  </nav>
+  {% block content %}{% endblock %}
+  <footer>TrackDeals EU · Car part deals · Prices in EUR · Data: Autodoc &amp; eBay</footer>
+</div>
+<script>
+  document.addEventListener('submit', function (e) {
+    var f = e.target.closest('form.search');
+    if (!f) return;
+    var o = document.createElement('div');
+    o.className = 'liveoverlay';
+    o.innerHTML = '<div class="livebox"><strong>Searching Autodoc for the best prices…</strong><small>Checking live prices, this usually takes up to a minute.</small></div>';
+    document.body.appendChild(o);
+  });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

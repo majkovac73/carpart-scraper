@@ -1,0 +1,26 @@
+{% if deals %}
+<div class="grid">
+  {% for deal in deals %}
+  <a class="card" href="/deal/{{ deal.id }}">
+    {% if deal.image_url %}
+    <div class="imgbox"><img src="{{ deal.image_url }}" onerror="this.parentElement.style.display='none'" alt=""></div>
+    {% endif %}
+    <div class="body">
+      {% if deal.discount_percentage %}
+      <span class="badge">⚠ −{{ deal.discount_percentage }}% vs avg</span>
+      {% else %}
+      <span class="badge">Lowest price found</span>
+      {% endif %}
+      <h3>{{ deal.title|en|car(deal.compatible_models) }}</h3>
+      <div class="price">{{ deal.sale_price|eur }} €</div>
+      <div class="o">
+        {% if deal.average_price %}Avg {{ deal.average_price|eur }} €{% endif %}
+        {% if deal.retail_price and deal.retail_price > deal.sale_price %} · RRP {{ deal.retail_price|eur }} €{% endif %}
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">No matching offers yet – try a different brand, model or keyword.</div>
+{% endif %}
