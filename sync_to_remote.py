@@ -4,15 +4,22 @@
 Render's free plan has no persistent disk, so the live site must read from a
 hosted Postgres (e.g. Neon). Run this once after wiring up the remote DB, and
 again any time you want to push newly collected deals to the live site. It is
-idempotent: brands/models/deals are upserted, deal-model links are added only
-when missing.
+idempotent and batched (2 roundtrips per table) so it is fast even over a
+remote connection.
 
 Usage (set the remote URL first; note the +psycopg scheme):
     $env:SQLALCHEMY_DATABASE_URL = "postgresql+psycopg://USER:PASS@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
     python sync_to_remote.py
+
+The script also reads SQLALCHEMY_DATABASE_URL from the local .env file
+automatically, so plain `python sync_to_remote.py` works once .env has it.
 """
 import os
 import sys
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 REMOTE_URL = os.getenv("SQLALCHEMY_DATABASE_URL")
 if not REMOTE_URL:
@@ -21,12 +28,16 @@ if not REMOTE_URL:
         '  $env:SQLALCHEMY_DATABASE_URL = "postgresql+psycopg://USER:PASS@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"'
     )
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, insert
 from sqlalchemy.orm import sessionmaker
 
 from database import Base, Brand, VehicleModel, Deal, deal_model_association
 
 LOCAL_URL = os.getenv("LOCAL_DB_URL", "sqlite:///./deals.db")
+FIELDS = [
+    "title", "title_en", "retail_price", "sale_price", "discount_percentage",
+    "average_price", "image_url", "source_url", "affiliate_link", "status",
+]
 
 
 def _sess(engine):
@@ -41,82 +52,79 @@ def main():
     l = _sess(local_engine)
     r = _sess(remote_engine)
 
-    brand_id_map = {}
-    for b in l.execute(select(Brand)).scalars():
-        existing = r.execute(select(Brand).where(Brand.name == b.name)).scalar_one_or_none()
-        if existing is None:
-            existing = Brand(name=b.name)
-            r.add(existing)
-            r.flush()
-        brand_id_map[b.id] = existing.id
+    # Brands
+    l_brands = list(l.scalars(select(Brand)))
+    r_brands = {b.name: b.id for b in r.scalars(select(Brand))}
+    missing = [{"name": b.name} for b in l_brands if b.name not in r_brands]
+    if missing:
+        r.execute(insert(Brand), missing)
+        r.flush()
+    r_brands = {b.name: b.id for b in r.scalars(select(Brand))}
+    brand_id_map = {b.id: r_brands[b.name] for b in l_brands}
 
-    model_id_map = {}
-    for m in l.execute(select(VehicleModel)).scalars():
-        rb_id = brand_id_map.get(m.brand_id)
-        if rb_id is None:
-            continue
-        existing = r.execute(
-            select(VehicleModel).where(
-                VehicleModel.name == m.name, VehicleModel.brand_id == rb_id
-            )
-        ).scalar_one_or_none()
-        if existing is None:
-            existing = VehicleModel(name=m.name, brand_id=rb_id)
-            r.add(existing)
-            r.flush()
-        model_id_map[m.id] = existing.id
-
-    fields = [
-        "title", "title_en", "retail_price", "sale_price", "discount_percentage",
-        "average_price", "image_url", "source_url", "affiliate_link", "status",
+    # Models
+    l_models = list(l.scalars(select(VehicleModel)))
+    r_models = {(m.brand_id, m.name) for m in r.scalars(select(VehicleModel))}
+    missing = [
+        {"name": m.name, "brand_id": brand_id_map[m.brand_id]}
+        for m in l_models
+        if m.brand_id in brand_id_map
+        and (brand_id_map[m.brand_id], m.name) not in r_models
     ]
-    deal_id_map = {}
+    if missing:
+        r.execute(insert(VehicleModel), missing)
+        r.flush()
+    r_models = {(m.brand_id, m.name): m.id for m in r.scalars(select(VehicleModel))}
+    model_id_map = {
+        m.id: r_models[(brand_id_map[m.brand_id], m.name)]
+        for m in l_models
+        if m.brand_id in brand_id_map
+    }
+
+    # Deals
+    l_deals = list(l.scalars(select(Deal)))
+    r_deals = {d.product_id: d for d in r.scalars(select(Deal))}
     inserted = updated = 0
-    for d in l.execute(select(Deal)).scalars():
-        existing = r.execute(
-            select(Deal).where(Deal.product_id == d.product_id)
-        ).scalar_one_or_none()
+    to_insert = []
+    for d in l_deals:
+        existing = r_deals.get(d.product_id)
         if existing is None:
-            existing = Deal(product_id=d.product_id, title=d.title)
-            r.add(existing)
+            to_insert.append({"product_id": d.product_id, **{f: getattr(d, f) for f in FIELDS}})
             inserted += 1
         else:
+            for f in FIELDS:
+                setattr(existing, f, getattr(d, f))
             updated += 1
-        for f in fields:
-            setattr(existing, f, getattr(d, f))
+    if to_insert:
+        r.execute(insert(Deal), to_insert)
         r.flush()
-        deal_id_map[d.id] = existing.id
+    r_deals = {d.product_id: d.id for d in r.scalars(select(Deal))}
+    deal_id_map = {d.id: r_deals[d.product_id] for d in l_deals}
 
-    added_assoc = 0
-    for row in l.execute(select(deal_model_association)).all():
-        r_deal_id = deal_id_map.get(row.deal_id)
-        r_model_id = model_id_map.get(row.model_id)
-        if r_deal_id is None or r_model_id is None:
+    # Deal-model links
+    r_assoc = {tuple(row) for row in r.execute(select(deal_model_association))}
+    assoc_rows = list(l.execute(select(deal_model_association)))
+    to_add = []
+    for deal_id, model_id in assoc_rows:
+        r_deal = deal_id_map.get(deal_id)
+        r_model = model_id_map.get(model_id)
+        if r_deal is None or r_model is None:
             continue
-        already = r.execute(
-            select(deal_model_association).where(
-                deal_model_association.c.deal_id == r_deal_id,
-                deal_model_association.c.model_id == r_model_id,
-            )
-        ).first()
-        if already is None:
-            r.execute(
-                deal_model_association.insert().values(
-                    deal_id=r_deal_id, model_id=r_model_id
-                )
-            )
-            added_assoc += 1
+        if (r_deal, r_model) not in r_assoc:
+            to_add.append({"deal_id": r_deal, "model_id": r_model})
+    if to_add:
+        r.execute(deal_model_association.insert(), to_add)
 
     r.commit()
 
-    n_brands = r.execute(select(Brand)).all().__len__()
-    n_models = r.execute(select(VehicleModel)).all().__len__()
-    n_deals = r.execute(select(Deal)).all().__len__()
-    n_assoc = r.execute(select(deal_model_association)).all().__len__()
+    n_brands = len(r_brands)
+    n_models = len(r_models)
+    n_deals = len(r_deals)
+    n_assoc = len(r_assoc) + len(to_add)
     print("Sync complete:")
     print(f"  brands: {n_brands} | models: {n_models}")
     print(f"  deals: {n_deals} ({inserted} inserted, {updated} updated)")
-    print(f"  deal-model links: {n_assoc} ({added_assoc} added)")
+    print(f"  deal-model links: {n_assoc} ({len(to_add)} added)")
 
 
 if __name__ == "__main__":
