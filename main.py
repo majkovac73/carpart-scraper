@@ -40,13 +40,13 @@ from crud import upsert_deal
 from autodoc_scraper import search_autodoc_part
 from ebay_scraper import fetch_ebay_deals
 from llm_engine import clean_deals
-from deal_filter import average_price, filter_deals_by_average, off_average_percentage
+from deal_filter import average_price, filter_deals_by_average, off_average_percentage, is_worth_deal
 from deals_format import format_deal_message
 from translate_parts import to_english_title
 from affiliate import affiliate_link_for_url
 from schedule import build_plan, record_result, EBAY_KEYWORDS, coverage_stats
 from parts_catalog import find_part
-from brand_names import extract_part_brand, car_makes_in_title
+from brand_names import extract_part_brand, car_makes_in_title, title_has_part_brand
 from cadence import due_ebay_keywords, mark_ebay_scanned, purge_stale_ebay
 
 load_dotenv()
@@ -56,21 +56,40 @@ def _now():
     return datetime.now().isoformat(timespec="seconds")
 
 
+DEFAULT_EBAY_DEAL_MIN_PRICE = 12.0
+DEFAULT_AUTODOC_DEAL_MIN_PRICE = 8.0
+DEFAULT_DEAL_MIN_SAVED = 6.0
+
+
 def _store(db, raw, *, part_de, part_en, source, vehicles=None,
            min_discount, saved_stats, title_override=None, discount=None):
     """Tags one scraped product with catalog metadata and upserts it.
 
-    status is "pending" for a real deal, otherwise "catalog". For eBay the
-    quality gate applies too: an unbranded listing under the price floor is
-    indexed but never promoted to a deal. Returns True when the product was
-    promoted (saved as a deal)."""
+    status is "pending" for a real deal, otherwise "catalog". A product only
+    becomes a deal when is_worth_deal() approves it: a genuine discount proof
+    (seller-marked RRP off, or a strong peer-average discount), an absolute
+    price floor and a minimum EUR saving. eBay additionally requires a known
+    part brand, so cheap no-name junk stays in the catalog and never enters
+    the feed. Returns True when the product was promoted (saved as a deal)."""
     product_id = raw.get("product_id")
     sale = raw.get("sale_price")
+    title = title_override or raw.get("title") or ""
     off = (discount if discount is not None
            else off_average_percentage(raw.get("average_price"), sale))
     good_quality = source != "ebay" or bool(raw.get("quality"))
-    is_deal = good_quality and off is not None and off >= min_discount
-    title = title_override or raw.get("title") or ""
+    min_price = (float(os.getenv("EBAY_DEAL_MIN_PRICE", str(DEFAULT_EBAY_DEAL_MIN_PRICE)))
+                 if source == "ebay" else
+                 float(os.getenv("AUTODOC_DEAL_MIN_PRICE", str(DEFAULT_AUTODOC_DEAL_MIN_PRICE))))
+    min_saved = float(os.getenv("DEAL_MIN_SAVED", str(DEFAULT_DEAL_MIN_SAVED)))
+
+    if not good_quality or (source == "ebay" and not title_has_part_brand(title)):
+        is_deal, pct = False, 0.0
+    else:
+        is_deal, pct, _base = is_worth_deal(
+            sale, raw.get("average_price"), raw.get("retail_price"),
+            min_discount=min_discount, min_price=min_price, min_saved=min_saved,
+        )
+
     brand = extract_part_brand(raw.get("raw_url") or "", raw.get("title") or "")
     upsert_deal(
         db,
@@ -79,7 +98,7 @@ def _store(db, raw, *, part_de, part_en, source, vehicles=None,
         title_en=raw.get("title_en") or to_english_title(title),
         retail_price=raw.get("retail_price"),
         sale_price=sale,
-        discount_percentage=off if is_deal else 0,
+        discount_percentage=pct if is_deal else 0,
         average_price=raw.get("average_price"),
         image_url=raw.get("image_url"),
         source_url=raw.get("raw_url"),

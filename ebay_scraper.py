@@ -131,18 +131,21 @@ def _build_filters(price_min: float, price_max: float) -> str:
 def fetch_ebay_deals(
     keyword: str,
     category_id: str = DEFAULT_CAR_PARTS_CATEGORY,
-    limit: int = 25,
-    price_min: float = None,
+    limit: int = 40,
+    price_min: float = 5.0,
     price_max: float = 400.0,
     marketplace: str = "EBAY_DE",
 ):
     """
-    Fetches the CHEAPEST generic car parts from eBay using a plain part keyword
+    Fetches generic car parts from eBay using a plain part keyword
     (e.g. "Bremsbeläge", "Ölfilter"), NOT a specific car or model.
 
-    Constrains the search to the Vehicle Parts & Accessories category and sorts
-    by price ascending so the best (lowest) price comes first. Discounted items
-    include the original price / discount percentage for the deal filter.
+    Constrains the search to the Vehicle Parts & Accessories category and
+    skips the sub-5 EUR junk band (single screws, clamps, moped bits) so the
+    sample and its batch average reflect real parts. Results use best-match
+    ranking (a representative mix) instead of cheapest-first so a genuine
+    discounted branded part has a chance to surface against a fair average.
+    Discounted items include the original price / discount percentage.
     """
     token = get_ebay_token()
     if not token:
@@ -158,7 +161,6 @@ def fetch_ebay_deals(
         "q": keyword,
         "limit": limit,
         "filter": _build_filters(price_min, price_max),
-        "sort": "price",  # ascending -> cheapest first
     }
 
     if category_id:
