@@ -36,7 +36,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from database import SessionLocal
-from crud import upsert_deal
+from crud import upsert_deal, get_deal_by_product_id
 from autodoc_scraper import search_autodoc_part
 from ebay_scraper import fetch_ebay_deals
 from llm_engine import clean_deals
@@ -175,7 +175,8 @@ def collect_autodoc_targets(db, limit, min_discount, dry_run, stats, combos,
             )
             if got_deal:
                 saved += 1
-                print_message(meta)
+                row = get_deal_by_product_id(db, meta.get("product_id"))
+                print_message(row or meta)
     return saved
 
 
@@ -222,7 +223,8 @@ def collect_ebay_generic(db, limit, min_discount, dry_run, stats, keywords):
             )
             if got_deal:
                 saved += 1
-                print_message(raw)
+                row = get_deal_by_product_id(db, raw.get("product_id"))
+                print_message(row or raw)
     return saved
 
 
