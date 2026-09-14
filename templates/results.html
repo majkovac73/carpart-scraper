@@ -16,7 +16,12 @@
       <option value="{{ m.name }}" {% if selected_model == m.name %}selected{% endif %}>{{ m.name }}</option>
       {% endfor %}
     </select>
-    <input type="text" name="q" value="{{ selected_q }}" placeholder="Enter a part, e.g. brake disc…">
+    <input type="text" name="part" id="part" list="parts-list"
+           placeholder="Part, e.g. brake discs…" value="{{ selected_part }}">
+    <datalist id="parts-list">
+      {% for en, de in parts %}<option value="{{ en }}">{{ de }}</option>{% endfor %}
+    </datalist>
+    <input type="text" name="q" id="q" value="{{ selected_q }}" placeholder="or free keyword…">
     <button type="submit">Search</button>
   </form>
 </div>

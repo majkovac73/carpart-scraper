@@ -9,18 +9,22 @@
       {% if deal.discount_percentage %}
       <span class="badge">⚠ −{{ deal.discount_percentage }}% vs avg</span>
       {% else %}
-      <span class="badge">Lowest price found</span>
+      <span class="badge">In catalog</span>
       {% endif %}
-      <h3>{{ deal.title|en|car(deal.compatible_models) }}</h3>
+      {% if deal.brand_name %}<span class="chip" style="align-self:flex-start;margin-top:6px">{{ deal.brand_name }}</span>{% endif %}
+      <h3>{{ deal|disp|car(deal.compatible_models) }}</h3>
       <div class="price">{{ deal.sale_price|eur }} €</div>
       <div class="o">
         {% if deal.average_price %}Avg {{ deal.average_price|eur }} €{% endif %}
         {% if deal.retail_price and deal.retail_price > deal.sale_price %} · RRP {{ deal.retail_price|eur }} €{% endif %}
       </div>
+      {% if deal.vehicle_brand %}<div class="veh">Fits: {{ deal.vehicle_brand }}</div>{% endif %}
+      {% if deal.part_en %}<div class="veh">Part: {{ deal.part_en }}</div>{% endif %}
+      {% if deal.updated_at %}<div class="veh">Seen {{ deal.updated_at[:10] }}</div>{% endif %}
     </div>
   </a>
   {% endfor %}
 </div>
 {% else %}
-<div class="empty">No matching offers yet – try a different brand, model or keyword.</div>
+<div class="empty">No matching offers yet – try a different brand, model or part.</div>
 {% endif %}

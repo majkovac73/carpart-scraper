@@ -28,15 +28,18 @@ if not REMOTE_URL:
         '  $env:SQLALCHEMY_DATABASE_URL = "postgresql+psycopg://USER:PASS@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"'
     )
 
-from sqlalchemy import create_engine, select, insert
+from sqlalchemy import create_engine, select, insert, delete
 from sqlalchemy.orm import sessionmaker
 
-from database import Base, Brand, VehicleModel, Deal, deal_model_association
+from database import (Base, Brand, VehicleModel, Deal, DealClick,
+                      deal_model_association, _ensure_columns)
 
 LOCAL_URL = os.getenv("LOCAL_DB_URL", "sqlite:///./deals.db")
 FIELDS = [
     "title", "title_en", "retail_price", "sale_price", "discount_percentage",
     "average_price", "image_url", "source_url", "affiliate_link", "status",
+    "clicks", "brand_name", "part_de", "part_en", "source", "vehicle_brand",
+    "updated_at",
 ]
 
 
@@ -48,6 +51,15 @@ def main():
     local_engine = create_engine(LOCAL_URL)
     remote_engine = create_engine(REMOTE_URL)
     Base.metadata.create_all(bind=remote_engine)
+    _ensure_columns(remote_engine, "deals", {
+        "clicks": "clicks INTEGER DEFAULT 0",
+        "brand_name": "brand_name VARCHAR(200)",
+        "part_de": "part_de VARCHAR(200)",
+        "part_en": "part_en VARCHAR(200)",
+        "source": "source VARCHAR(64)",
+        "vehicle_brand": "vehicle_brand VARCHAR(500)",
+        "updated_at": "updated_at VARCHAR(32)",
+    })
 
     l = _sess(local_engine)
     r = _sess(remote_engine)
@@ -98,6 +110,21 @@ def main():
     if to_insert:
         r.execute(insert(Deal), to_insert)
         r.flush()
+
+    # Deals purged locally are removed remotely too (full mirror), so junk or
+    # withdrawn items never stay live. Their deal-model links go first because
+    # the association table has no cascade.
+    local_pids = {d.product_id for d in l_deals}
+    stale = [d for pid, d in r_deals.items() if pid not in local_pids]
+    deleted = 0
+    if stale:
+        stale_ids = [d.id for d in stale]
+        r.execute(delete(deal_model_association).where(deal_model_association.c.deal_id.in_(stale_ids)))
+        r.execute(delete(DealClick).where(DealClick.deal_id.in_(stale_ids)))
+        r.execute(delete(Deal).where(Deal.id.in_(stale_ids)))
+        r.flush()
+        deleted = len(stale_ids)
+
     r_deals = {d.product_id: d.id for d in r.scalars(select(Deal))}
     deal_id_map = {d.id: r_deals[d.product_id] for d in l_deals}
 
@@ -123,7 +150,7 @@ def main():
     n_assoc = len(r_assoc) + len(to_add)
     print("Sync complete:")
     print(f"  brands: {n_brands} | models: {n_models}")
-    print(f"  deals: {n_deals} ({inserted} inserted, {updated} updated)")
+    print(f"  deals: {n_deals} ({inserted} inserted, {updated} updated, {deleted} deleted)")
     print(f"  deal-model links: {n_assoc} ({len(to_add)} added)")
 
 

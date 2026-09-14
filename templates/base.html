@@ -48,9 +48,10 @@
   .detail .imgbox{background:#fff;border-radius:12px;padding:18px;display:flex;align-items:center;justify-content:center}
   .detail img{max-width:100%;max-height:320px;object-fit:contain}
   .price-big{font-size:32px;font-weight:800;margin:10px 0}
-  .meta{color:var(--muted);font-size:14px;line-height:1.8}
+  .meta{color:var(--muted);font-size:14px;line-height:1.8;overflow-wrap:anywhere;word-break:break-word}
   .btn{display:inline-block;padding:12px 22px;background:var(--accent);color:#17180f;border-radius:9px;font-weight:700;text-decoration:none;margin-top:14px}
-  pre.preview{background:#141824;border:1px solid #2c3547;border-radius:10px;padding:14px;white-space:pre-wrap;font-family:inherit;line-height:1.6;color:var(--text);max-width:520px}
+  pre.preview{background:#141824;border:1px solid #2c3547;border-radius:10px;padding:14px;white-space:pre-wrap;font-family:inherit;line-height:1.6;color:var(--text);max-width:520px;overflow-wrap:anywhere;word-break:break-word}
+  .o{margin:4px 0 0;font-size:13px;color:var(--muted)}
   .label{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:18px 0 6px}
 </style>
 </head>
@@ -60,20 +61,18 @@
     <span class="logo">🔧 TrackDeals EU</span>
     <a href="/" {% if page == 'home' %}class="active"{% endif %}>Home</a>
     <a href="/deals" {% if page == 'deals' %}class="active"{% endif %}>Good deals</a>
+    <a href="/about" {% if page == 'about' %}class="active"{% endif %}>About</a>
   </nav>
   {% block content %}{% endblock %}
-  <footer>TrackDeals EU · Car part deals · Prices in EUR · Data: Autodoc &amp; eBay</footer>
+  <footer>
+    TrackDeals EU · Car part deals · Prices in EUR · Data: Autodoc &amp; eBay
+    <br>
+    Affiliate disclosure: some links are marked with "↗" and are affiliate
+    links – if you buy after clicking one we may earn a commission from the
+    eBay Partner Network at no extra cost to you. TrackDeals is not affiliated
+    with or endorsed by Autodoc or eBay.
+  </footer>
 </div>
-<script>
-  document.addEventListener('submit', function (e) {
-    var f = e.target.closest('form.search');
-    if (!f) return;
-    var o = document.createElement('div');
-    o.className = 'liveoverlay';
-    o.innerHTML = '<div class="livebox"><strong>Searching Autodoc for the best prices…</strong><small>Checking live prices, this usually takes up to a minute.</small></div>';
-    document.body.appendChild(o);
-  });
-</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

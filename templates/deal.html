@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ deal.title|en if deal else 'Not found' }}{% endblock %}
+{% block title %}{{ deal|disp if deal else 'Not found' }}{% endblock %}
 {% block content %}
 
 {% if not deal %}
@@ -12,13 +12,16 @@
 
   <div>
     <span class="badge">{% if deal.discount_percentage %}⚠ −{{ deal.discount_percentage }}% below market average{% else %}Lowest price found{% endif %}</span>
-    <h1 style="font-size:22px;margin:8px 0">{{ deal.title|en|car(deal.compatible_models) }}</h1>
+    <h1 style="font-size:22px;margin:8px 0">{{ deal|disp|car(deal.compatible_models) }}</h1>
 
     <div class="price-big">{{ deal.sale_price|eur }} €</div>
     <div class="meta">
+      {% if deal.brand_name %}Part maker: <b>{{ deal.brand_name }}</b><br>{% endif %}
+      {% if deal.part_en %}Part: {{ deal.part_en }}{% if deal.part_de %} ({{ deal.part_de }}){% endif %}<br>{% endif %}
+      {% if deal.vehicle_brand %}Listed for: {{ deal.vehicle_brand }}<br>{% endif %}
       {% if deal.average_price %}Market average: <b>{{ deal.average_price|eur }} €</b><br>{% endif %}
       {% if deal.retail_price and deal.retail_price > deal.sale_price %}RRP: {{ deal.retail_price|eur }} €<br>{% endif %}
-      Status: {{ deal.status }}<br>
+      Status: {{ deal.status }} · Clicks: {{ deal.clicks or 0 }}{% if deal.updated_at %} · Seen {{ deal.updated_at[:10] }}{% endif %}<br>
       Source: {{ deal.product_id }}
     </div>
 
@@ -30,7 +33,7 @@
     {% endif %}
 
     {% if deal.source_url or deal.affiliate_link %}
-    <a class="btn" href="{{ deal.affiliate_link or deal.source_url }}" target="_blank" rel="noopener">View deal ↗</a>
+    <a class="btn" href="/out/{{ deal.id }}" target="_blank" rel="noopener nofollow sponsored">View deal ↗</a>
     {% endif %}
 
     <div class="label">Telegram format</div>

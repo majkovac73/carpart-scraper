@@ -11,10 +11,9 @@ CARD_SELECTOR = "div[data-article-id][data-product-item], div.listing-item-inlin
 
 CHALLENGE_MARKERS = ("nur einen moment", "just a moment", "checking your browser")
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
+# NOTE: no custom user agent here on purpose. Playwright's default UA matches
+# its bundled Chromium version exactly; a hardcoded Chrome/126 UA while running
+# Chromium 151 is an instant Cloudflare bot flag (engine/UA mismatch).
 
 
 def build_search_url(part: str, brand: str, model: str) -> str:
@@ -72,9 +71,11 @@ def _await_results(page, search_url: str, attempt_timeout: int = 45, retries: in
 
             body = _body_text(page)
             if _is_challenge(page):
-                print("  Cloudflare challenge detected, giving it time to resolve...")
-                time.sleep(6)
-                break
+                print("  Cloudflare challenge detected, waiting for it to resolve...")
+                # The challenge JS auto-reloads the page once solved; keep the
+                # attempt alive and poll for cards instead of reloading fresh.
+                time.sleep(10)
+                continue
             if "keine treffer" in body or "no matches" in body:
                 print("  no search results on this page")
                 return False
@@ -194,7 +195,6 @@ def search_autodoc_part(part: str, brand: str, model: str, limit: int = 5,
             args=launch_args,
         )
         context = browser.new_context(
-            user_agent=USER_AGENT,
             viewport={"width": 1366, "height": 850},
             locale="de-DE",
             timezone_id="Europe/Berlin",

@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Table, text
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Table, text, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL", "sqlite:///./deals.db")
@@ -59,10 +59,62 @@ class Deal(Base):
     image_url = Column(String, nullable=True)
     source_url = Column(String, nullable=True)
     affiliate_link = Column(String, nullable=True)
-    status = Column(String, default="pending") 
-    
+    status = Column(String, default="pending")
+    clicks = Column(Integer, default=0)
+
+    # --- Catalog / fit metadata (added for the indexed-search + fit filter) ---
+    brand_name = Column(String, nullable=True)          # part maker (e.g. "FEBI BILSTEIN")
+    part_de = Column(String, nullable=True)             # catalog part keyword (German)
+    part_en = Column(String, nullable=True)             # catalog part name (English)
+    source = Column(String, nullable=True)              # "autodoc" | "ebay"
+    vehicle_brand = Column(String, nullable=True)       # car makes mentioned in title (eBay generic)
+    updated_at = Column(String, nullable=True)          # ISO timestamp of last sighting (freshness)
+
     # Links the deal to the specific car models it fits
     compatible_models = relationship("VehicleModel", secondary=deal_model_association, back_populates="deals")
+
+
+class DealClick(Base):
+    """One row per outbound click on the 'View deal' links, so clicks can be
+    counted independently of the marketing network's (delayed) dashboard."""
+
+    __tablename__ = "deal_clicks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id"), index=True, nullable=False)
+    clicked_at = Column(String, nullable=False)  # ISO timestamp
+    referer = Column(String, nullable=True)
+
+
+class SearchLog(Base):
+    """Tracks which (part, brand, model) combos the pipeline already tried, so a
+    rotation scheduler can spread searches across the whole catalog over time
+    and re-visit older ones instead of repeating the same set every run."""
+
+    __tablename__ = "search_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    part = Column(String, nullable=False)
+    brand = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+    searched_at = Column(String, nullable=True)  # ISO timestamp (string, sortable)
+    status = Column(String, nullable=True)  # found / none / blocked / error
+    found_count = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("part", "brand", "model", name="uq_search_log_combo"),
+    )
+
+class EbayKeywordLog(Base):
+    """When each eBay keyword was last scanned, so the hourly sweep only hits
+    keywords that are due instead of hammering the same ones every run."""
+
+    __tablename__ = "ebay_keyword_log"
+
+    keyword = Column(String, primary_key=True)
+    scanned_at = Column(String, nullable=True)  # ISO timestamp (string, sortable)
+    found_count = Column(Integer, default=0)
+
 
 # Create all tables automatically
 Base.metadata.create_all(bind=engine)
@@ -70,25 +122,50 @@ Base.metadata.create_all(bind=engine)
 
 def _ensure_columns(engine, table, columns):
     """Lightweight migration: adds missing columns to an existing table.
-    SQLite-only helper (uses PRAGMA); Postgres/other hosts get full schemas
-    via create_all above, so nothing to do there."""
-    if not str(engine.url).startswith("sqlite"):
-        return
-    with engine.connect() as conn:
-        existing = {
-            row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))
-        }
-        for name, ddl in columns.items():
-            if name not in existing:
-                try:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
-                    conn.commit()
-                except Exception:
-                    pass
+
+    Works on SQLite (checked via PRAGMA) and Postgres (checked via
+    information_schema), so adding a column to a model is safe on old local
+    copies and on already-deployed Neon/Render databases."""
+    if str(engine.url).startswith("sqlite"):
+        with engine.connect() as conn:
+            existing = {
+                row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))
+            }
+            for name, ddl in columns.items():
+                if name not in existing:
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+                        conn.commit()
+                    except Exception:
+                        pass
+    else:
+        with engine.begin() as conn:
+            existing = {
+                row[0]
+                for row in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    f"WHERE table_name = '{table}'"
+                ))
+            }
+            for name, ddl in columns.items():
+                if name not in existing:
+                    try:
+                        conn.execute(text(
+                            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {ddl}"
+                        ))
+                    except Exception:
+                        pass
 
 
 _ensure_columns(engine, "deals", {
     "average_price": "average_price FLOAT",
     "source_url": "source_url VARCHAR(1000)",
     "title_en": "title_en VARCHAR(1000)",
+    "clicks": "clicks INTEGER DEFAULT 0",
+    "brand_name": "brand_name VARCHAR(200)",
+    "part_de": "part_de VARCHAR(200)",
+    "part_en": "part_en VARCHAR(200)",
+    "source": "source VARCHAR(64)",
+    "vehicle_brand": "vehicle_brand VARCHAR(500)",
+    "updated_at": "updated_at VARCHAR(32)",
 })

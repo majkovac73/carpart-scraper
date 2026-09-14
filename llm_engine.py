@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 # Seed "known chassis code -> vehicle" map used by the local fallback (and as a
 # hint for the LLM prompt). Add more entries over time to widen coverage.
@@ -142,12 +142,18 @@ SYSTEM_PROMPT = (
     "You clean automotive parts listing data into strict JSON for a deal feed. "
     "For each input listing, return one object inside a JSON array, in the same "
     "order, with exactly these fields:\n"
-    '{"product_id": string, "clean_title": string, "part_brand": string|null, '
-    '"chassis_code": string|null, "condition": "new"|"used"|"refurbished"|"unknown", '
+    '{"product_id": string, "clean_title": string, "title_en": string, '
+    '"part_brand": string|null, "chassis_code": string|null, '
+    '"condition": "new"|"used"|"refurbished"|"unknown", '
     '"compatible_vehicles": [{"brand": string, "model": string}]}\n'
     "Rules:\n"
     "- clean_title: collapse whitespace, drop SEO filler ('Autoteile günstig', "
     "'online kaufen', etc.), keep the factual part data.\n"
+    "- title_en: a clean British-English translation of clean_title. Translate "
+    "everything (part names, fitment info, dimensions, brands stay as proper "
+    "nouns). Keep factual details like part numbers, sizes and chassis codes. "
+    "Example: 'Kupplungssatz fuer Motoren mit Zweimassenschwungrad' -> 'Clutch "
+    "kit for engines with dual-mass flywheel'.\n"
     "- compatible_vehicles: cars this part is made for. Use the search context when "
     "given, and infer from chassis codes in the title (e.g. E46 -> BMW E46). "
     "Return an empty array if nothing points to a concrete car.\n"
@@ -189,7 +195,6 @@ def _llm_clean_batch(deals, context, default_vehicle):
             response_mime_type="application/json",
             temperature=0.1,
         ),
-        timeout=90,
     )
 
     text = response.text.strip()
@@ -249,6 +254,7 @@ def clean_deals(deals, context=None, default_vehicle=None):
                     if row:
                         merged = dict(deal)
                         merged["clean_title"] = row.get("clean_title") or _clean_title(deal.get("title"))
+                        merged["title_en"] = row.get("title_en")
                         merged["part_brand"] = row.get("part_brand")
                         merged["chassis_code"] = row.get("chassis_code")
                         merged["condition"] = row.get("condition") or "unknown"

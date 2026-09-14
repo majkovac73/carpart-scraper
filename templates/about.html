@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}About &amp; disclosure{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>About TrackDeals EU</h1>
+  <p>How the deals are found, how we make money, and what to be aware of.</p>
+</div>
+
+<h2>How deals are found</h2>
+<p>
+  We scan public EU marketplaces (Autodoc and eBay, German marketplace) for
+  common car parts. A product is shown as a "deal" only when its price is at
+  least 15% below the average price of the same part in the same search batch,
+  so "discounts" are measured against the real market, not a pumped-up RRP.
+</p>
+
+<h2>Affiliate disclosure</h2>
+<ul>
+  <li>Links marked with "↗" on this site are <b>affiliate links</b> (eBay
+      Partner Network). If you follow one and buy something, we may earn a
+      commission at no extra cost to you.</li>
+  <li>Autodoc product links are regular product links unless a partner
+      programme is configured.</li>
+  <li>TrackDeals EU is <b>not affiliated with, sponsored or endorsed by</b>
+      Autodoc, eBay, or any car or parts manufacturer.</li>
+  <li>Prices and availability come from the source sites and can change at any
+      time; the "seen" date shows when a price was last confirmed.</li>
+</ul>
+
+<h2>Data sourcing note</h2>
+<p>
+  The site indexes parts from public listings and is not a shop. Always verify
+  fitment (make, model, year, engine) with the seller before buying. We try to
+  show which car makes each part mentions, but the final compatibility check is
+  your responsibility together with the seller.
+</p>
+{% endblock %}
