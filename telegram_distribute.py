@@ -24,7 +24,7 @@ from deals_format import format_deal_message, x_copy_text
 
 load_dotenv()
 
-PENDING_LIMIT = 50
+PENDING_LIMIT = 100
 
 
 def _require_env(*names):
@@ -41,21 +41,37 @@ def _get_bot():
     return Bot(token=token)
 
 
+async def _send_with_retry(send, *args, attempt=0):
+    """Sends one Telegram message, retrying through flood-control rate limits.
+    Telegram's RetryAfter tells us exactly how long to wait (channel limits can
+    demand ~1 message / 30 s, far slower than the default ~1/s)."""
+    try:
+        await send(*args)
+        return True
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "retry" in msg and "seconds" in msg and attempt < 6:
+            import re
+            m = re.search(r"in ([\d.]+) seconds|retry after ([\d.]+)", msg)
+            wait = float(m.group(1)) if m else 30.0
+            print(f"    rate-limited ({wait}s), waiting and retrying...")
+            await asyncio.sleep(wait)
+            return await _send_with_retry(send, *args, attempt=attempt + 1)
+        return False
+
+
 async def _post_to_channel(bot, chat_id, deal) -> bool:
     """Posts one deal; tries photo + caption, falls back to plain text."""
     caption = format_deal_message(deal)
     if deal.image_url:
-        try:
-            await bot.send_photo(chat_id=chat_id, photo=deal.image_url, caption=caption)
+        if await _send_with_retry(bot.send_photo, chat_id=chat_id,
+                                   photo=deal.image_url, caption=caption):
             return True
-        except Exception as exc:
-            print(f"    image send failed ({exc}), retrying as text")
-    try:
-        await bot.send_message(chat_id=chat_id, text=caption)
+        print("    image send failed, retrying as text")
+    if await _send_with_retry(bot.send_message, chat_id=chat_id, text=caption):
         return True
-    except Exception as exc:
-        print(f"    text send failed: {exc}")
-        return False
+    print("    text send failed")
+    return False
 
 
 async def broadcast_pending(bot, chat_id, admin_chat_id, dry_run, admin_only=False) -> tuple:

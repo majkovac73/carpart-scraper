@@ -61,6 +61,7 @@ def _await_results(page, search_url: str, attempt_timeout: int = 45, retries: in
             print(f"  navigation error: {e}")
 
         deadline = time.time() + attempt_timeout
+        challenge_since = None
         while time.time() < deadline:
             try:
                 page.wait_for_selector(CARD_SELECTOR, timeout=6000)
@@ -72,8 +73,13 @@ def _await_results(page, search_url: str, attempt_timeout: int = 45, retries: in
             body = _body_text(page)
             if _is_challenge(page):
                 print("  Cloudflare challenge detected, waiting for it to resolve...")
-                # The challenge JS auto-reloads the page once solved; keep the
-                # attempt alive and poll for cards instead of reloading fresh.
+                if challenge_since is None:
+                    challenge_since = time.time()
+                elif time.time() - challenge_since >= 15:
+                    # Bounded wait: a blocked combo must not stall the whole
+                    # daemon cadence (eBay sweeps / Telegram broadcasts).
+                    print("  Cloudflare not clearing, retrying with a fresh load...")
+                    break
                 time.sleep(10)
                 continue
             if "keine treffer" in body or "no matches" in body:

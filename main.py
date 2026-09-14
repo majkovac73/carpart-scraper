@@ -229,15 +229,25 @@ def collect_ebay_generic(db, limit, min_discount, dry_run, stats, keywords):
     return saved
 
 
-def _maybe_send_telegram(dry_run: bool):
-    """(optional) after a live run: broadcast the freshly saved deals."""
+def _maybe_send_telegram(dry_run: bool, run_in_thread: bool = False):
+    """(optional) after a run: broadcast the freshly saved deals.
+    In daemon mode the broadcast is deferred to a background thread so
+    Telegram's flood-control pacing cannot stall the eBay/Autodoc loop."""
     if dry_run:
         return
-    try:
-        from telegram_distribute import run_broadcast
-        run_broadcast(dry_run=False, admin_only=False)
-    except Exception as exc:
-        print(f"\n[telegram] skipped: {exc}")
+
+    def _worker():
+        try:
+            from telegram_distribute import run_broadcast
+            run_broadcast(dry_run=False, admin_only=False)
+        except Exception as exc:
+            print(f"\n[telegram] skipped: {exc}")
+
+    if run_in_thread:
+        import threading
+        threading.Thread(target=_worker, daemon=True).start()
+        return
+    _worker()
 
 
 def print_message(deal):
@@ -294,12 +304,16 @@ def run_daemon(args):
     else:
         print(f"  pinging {os.getenv('SITE_URL', 'https://trackdeals.eu')} "
               f"every {ping_every/60:.0f}m to keep Render warm")
-    next_ebay = next_autodoc = next_ping = time.time()
+    next_ebay = next_autodoc = next_ping = next_tg = time.time()
     while True:
         now = time.time()
         if now >= next_ping and ping_every > 0:
             _ping_site()
             next_ping = now + ping_every
+        if now >= next_tg and args.telegram:
+            print(f"\n--- [{datetime.now():%H:%M:%S}] Telegram broadcast ---")
+            _maybe_send_telegram(args.dry_run, run_in_thread=True)
+            next_tg = now + args.telegram_every
         if now >= next_ebay and not args.no_ebay:
             print(f"\n--- [{datetime.now():%H:%M:%S}] eBay sweep ---")
             db = SessionLocal()
@@ -316,8 +330,6 @@ def run_daemon(args):
             stats = _fresh_stats()
             try:
                 run_autodoc_stage(db, args, stats, seed=None, headless=args.headless)
-                if args.telegram:
-                    _maybe_send_telegram(args.dry_run)
             finally:
                 db.close()
             _print_summary(stats, db=None)
@@ -380,6 +392,9 @@ def main():
                         help="loop forever: eBay hourly, Autodoc daily")
     parser.add_argument("--telegram", action="store_true",
                         help="after persisting, broadcast new deals to Telegram")
+    parser.add_argument("--telegram-every", type=int,
+                        default=int(os.getenv("TELEGRAM_INTERVAL_SECONDS", "3600")),
+                        help="min seconds between Telegram broadcasts in daemon (default 3600)")
     parser.add_argument("--headless", action="store_true",
                         help="run Autodoc browser in headless mode (for background/daemon)")
     args = parser.parse_args()
