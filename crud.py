@@ -107,20 +107,29 @@ def get_good_deals(
     skip: int = 0,
     limit: int = 20,
     min_discount: float = None,
+    source: str = None,
 ):
     """Real deals only: cached 'search' snapshots and tagged 'catalog' products
     are excluded and only offers at least `min_discount`% below the market
     average are shown (default from the MIN_DISCOUNT env / 15). Best discount
-    first."""
+    first; pass source="ebay"/"autodoc" to restrict to one marketplace."""
     if min_discount is None:
         min_discount = float(os.getenv("MIN_DISCOUNT", "15"))
-    return (
+    q = (
         db.query(Deal)
         .filter(
             Deal.status.notin_(NON_DEAL_STATUSES),
             Deal.discount_percentage >= min_discount,
         )
-        .order_by(Deal.discount_percentage.desc(), Deal.id.desc())
+    )
+    if source:
+        q = q.filter(Deal.source == source)
+    return (
+        q.order_by(
+            Deal.source.desc(),              # eBay first (revenue source)
+            Deal.discount_percentage.desc(),
+            Deal.id.desc(),
+        )
         .offset(skip)
         .limit(limit)
         .all()
@@ -138,6 +147,19 @@ def deal_worth_showing(deal, min_discount: float = None) -> bool:
         return float(getattr(deal, "discount_percentage", 0) or 0) >= min_discount
     except (TypeError, ValueError):
         return False
+
+def get_site_stats(db: Session) -> dict:
+    """Quick stats for the homepage: total indexed, total deals, last updated."""
+    from sqlalchemy import func
+    total = db.query(Deal).count()
+    deals = db.query(Deal).filter(Deal.status.notin_(NON_DEAL_STATUSES)).count()
+    last = db.query(Deal.updated_at).filter(Deal.updated_at.isnot(None)).order_by(Deal.updated_at.desc()).first()
+    return {
+        "total_indexed": total,
+        "total_deals": deals,
+        "last_updated": (last[0] or "")[:10] if last else "",
+    }
+
 
 def get_models_by_brand(db: Session, brand_name: str = None):
     """All vehicle models, optionally filtered by brand (for the search form)."""
@@ -203,7 +225,7 @@ def search_deals(db: Session, brand: str = None, model: str = None,
     rows = query.order_by(Deal.discount_percentage.desc()).all()
     deals = [d for d in rows if d.status not in NON_DEAL_STATUSES]
     catalog = [d for d in rows if d.status in NON_DEAL_STATUSES]
-    deals.sort(key=lambda d: -(d.discount_percentage or 0))
+    deals.sort(key=lambda d: (0 if d.source == "ebay" else 1, -(d.discount_percentage or 0)))
     catalog.sort(key=lambda d: ((d.sale_price or 0)))
     merged = deals + catalog
     return merged[skip:skip + limit]

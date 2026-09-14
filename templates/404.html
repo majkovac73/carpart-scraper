@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Page not found – TrackDeals EU{% endblock %}
+{% block content %}
+<div style="text-align:center;padding:80px 0">
+  <div style="font-size:64px;margin-bottom:12px">🔍</div>
+  <h1 style="margin:0 0 8px">Page not found</h1>
+  <p style="color:var(--muted);margin:0 0 24px">{{ message|default("The page you're looking for doesn't exist or has been moved.") }}</p>
+  <a href="/" class="btn" style="margin-right:8px">Browse deals</a>
+  <a href="/deals" class="btn" style="background:#2c3547;color:var(--text)">All deals</a>
+</div>
+{% endblock %}

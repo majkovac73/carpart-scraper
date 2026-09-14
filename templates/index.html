@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="hero">
-  <h1>Car part deals for your car</h1>
-  <p>Search parts for your specific car brand and model – instant results from our indexed catalog.</p>
+  <h1>Find the best car part deals</h1>
+  <p>Indexed from eBay &amp; Autodoc – prices compared to market averages, only the real discounts shown.</p>
   <form class="search" action="/search" method="get">
     <select name="brand" id="brand">
       <option value="">Brand (all)</option>
@@ -15,14 +15,30 @@
     <datalist id="parts-list">
       {% for en, de in parts %}<option value="{{ en }}">{{ de }}</option>{% endfor %}
     </datalist>
-    <input type="text" name="q" id="q" placeholder="or free keyword…" style="display:none">
     <button type="submit">Search</button>
   </form>
-  <p style="margin-top:10px;font-size:13px;color:var(--muted)">Part suggestions come from our catalog of {{ parts|length }} common car parts. Results load instantly from the local index.</p>
+  <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)">
+    <span>{{ stats.total_indexed }} parts indexed</span>
+    <span>·</span>
+    <span>{{ stats.total_deals }} deals found</span>
+    <span>·</span>
+    <span>{{ parts|length }} part types tracked</span>
+    {% if stats.last_updated %}<span>·</span><span>Updated {{ stats.last_updated }}</span>{% endif %}
+  </div>
 </div>
 
-<h2>Latest deals</h2>
+{% if ebay_deals %}
+<h2>eBay deals</h2>
+<p style="color:var(--muted);font-size:13px;margin-top:0">Best discounts on branded car parts from eBay – these support the site via affiliate links.</p>
+{% set deals = ebay_deals %}
 {% include "_deals.html" %}
+{% endif %}
+
+{% if more_deals %}
+<h2>More deals</h2>
+{% set deals = more_deals %}
+{% include "_deals.html" %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

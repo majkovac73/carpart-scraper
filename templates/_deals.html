@@ -3,15 +3,22 @@
   {% for deal in deals %}
   <a class="card" href="/deal/{{ deal.id }}">
     {% if deal.image_url %}
-    <div class="imgbox"><img src="{{ deal.image_url }}" onerror="this.parentElement.style.display='none'" alt=""></div>
+    <div class="imgbox"><img src="{{ deal.image_url }}" loading="lazy" onerror="this.parentElement.style.display='none'" alt="{{ deal|disp }}"></div>
     {% endif %}
     <div class="body">
-      {% if deal.discount_percentage %}
-      <span class="badge">⚠ −{{ deal.discount_percentage }}% vs avg</span>
-      {% else %}
-      <span class="badge">In catalog</span>
-      {% endif %}
-      {% if deal.brand_name %}<span class="chip" style="align-self:flex-start;margin-top:6px">{{ deal.brand_name }}</span>{% endif %}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        {% if deal.source == 'ebay' %}
+        <span class="badge" style="background:rgba(228,63,40,.15);color:#e43f28">eBay</span>
+        {% elif deal.source == 'autodoc' %}
+        <span class="badge" style="background:rgba(59,130,246,.15);color:#3b82f6">Autodoc</span>
+        {% endif %}
+        {% if deal.discount_percentage %}
+        <span class="badge">−{{ deal.discount_percentage }}% vs avg</span>
+        {% endif %}
+        {% if deal.brand_name %}
+        <span class="chip">{{ deal.brand_name }}</span>
+        {% endif %}
+      </div>
       <h3>{{ deal|disp|car(deal.compatible_models) }}</h3>
       <div class="price">{{ deal.sale_price|eur }} €</div>
       <div class="o">

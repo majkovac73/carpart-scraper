@@ -27,12 +27,15 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, PlainTextResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from database import SessionLocal, Brand, Deal, DealClick
 from crud import (search_deals, get_deal_by_id,
-                  get_models_by_brand, get_good_deals, deal_worth_showing)
+                  get_models_by_brand, get_good_deals, deal_worth_showing,
+                  get_site_stats)
 from deals_format import _fmt_eur, format_deal_message
 from translate_parts import to_english_title, title_with_vehicles
 from parts_catalog import part_labels
@@ -53,6 +56,21 @@ def _display_title(deal) -> str:
 
 
 templates.env.filters["disp"] = _display_title
+
+SITE_NAME = "TrackDeals EU"
+SITE_DESC = "Car part deals from eBay & Autodoc — indexed, filtered, instantly searchable."
+SITE_URL = os.getenv("SITE_URL", "https://trackdeals.eu")
+
+
+def _og(title: str = None, description: str = None, image: str = None,
+        url: str = None) -> dict:
+    """Return OG meta values merged with defaults for the base template."""
+    return {
+        "og_title": title or SITE_NAME,
+        "og_desc": description or SITE_DESC,
+        "og_image": image or "",
+        "og_url": url or SITE_URL,
+    }
 
 # Live searches scraped from Autodoc directly (opening a browser window) are
 # serialised so one request at a time touches Playwright.
@@ -187,13 +205,18 @@ def home(request: Request):
     db = _db()
     try:
         brands = db.query(Brand).order_by(Brand.name).all()
-        deals = get_good_deals(db, limit=12)
+        ebay_deals = get_good_deals(db, limit=12, source="ebay")
+        more_deals = get_good_deals(db, limit=8, source="autodoc")
+        stats = get_site_stats(db)
         return templates.TemplateResponse("index.html", {
             "request": request,
             "brands": brands,
-            "deals": deals,
+            "ebay_deals": ebay_deals,
+            "more_deals": more_deals,
             "parts": part_labels(),
             "page": "home",
+            "stats": stats,
+            **_og(),
         })
     finally:
         db.close()
@@ -243,10 +266,17 @@ def deal_detail(request: Request, deal_id: int):
             return templates.TemplateResponse("deal.html", {
                 "request": request, "deal": None, "message": "",
             }, status_code=404)
+        title = _display_title(deal)
         return templates.TemplateResponse("deal.html", {
             "request": request,
             "deal": deal,
             "message": format_deal_message(deal),
+            **_og(
+                title=f"{title} – {deal.sale_price}€ on TrackDeals",
+                description=f"Save {deal.discount_percentage}% vs market average" if deal.discount_percentage else title,
+                image=deal.image_url or "",
+                url=f"{SITE_URL}/deal/{deal.id}",
+            ),
         })
     finally:
         db.close()
@@ -318,7 +348,77 @@ def search(
 
 @app.get("/about")
 def about(request: Request):
-    return templates.TemplateResponse("about.html", {"request": request, "page": "about"})
+    return templates.TemplateResponse("about.html", {
+        "request": request, "page": "about",
+        **_og(title="About TrackDeals EU", description="How TrackDeals works, affiliate disclosure, and data sourcing."),
+    })
+
+
+# ---------------------------------------------------------------------
+# SEO / crawlers
+# ---------------------------------------------------------------------
+
+@app.get("/robots.txt")
+def robots_txt():
+    return PlainTextResponse(
+        "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /out/\n\n"
+        f"Sitemap: {SITE_URL}/sitemap.xml\n",
+        media_type="text/plain",
+    )
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    db = _db()
+    try:
+        deals = (
+            db.query(Deal)
+            .filter(Deal.status.notin_(["search", "catalog"]))
+            .order_by(Deal.id.desc())
+            .limit(500)
+            .all()
+        )
+        rows = [
+            f'<url><loc>{SITE_URL}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
+            f'<url><loc>{SITE_URL}/deals</loc><changefreq>daily</changefreq><priority>0.9</priority></url>',
+            f'<url><loc>{SITE_URL}/about</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>',
+        ]
+        for d in deals:
+            rows.append(
+                f'<url><loc>{SITE_URL}/deal/{d.id}</loc>'
+                f'<lastmod>{(d.updated_at or "")[:10]}</lastmod>'
+                f'<changefreq>weekly</changefreq><priority>0.7</priority></url>'
+            )
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        xml += "\n".join(rows)
+        xml += "\n</urlset>"
+        return PlainTextResponse(xml, media_type="application/xml")
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------
+# Error handlers
+# ---------------------------------------------------------------------
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        return templates.TemplateResponse("404.html", {
+            "request": request,
+            **_og(title="Page not found – TrackDeals EU"),
+        }, status_code=404)
+    return HTMLResponse(f"<h1>{exc.status_code}</h1><p>{exc.detail}</p>",
+                        status_code=exc.status_code)
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    return templates.TemplateResponse("404.html", {
+        "request": request,
+        "message": "Something went wrong. Please try again.",
+        **_og(title="Error – TrackDeals EU"),
+    }, status_code=500)
 
 
 # ---------------------------------------------------------------------

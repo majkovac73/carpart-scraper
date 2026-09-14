@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ deal|disp if deal else 'Not found' }}{% endblock %}
+{% block title %}{{ deal|disp if deal else 'Not found' }} – TrackDeals EU{% endblock %}
 {% block content %}
 
 {% if not deal %}
@@ -11,18 +11,38 @@
   {% endif %}
 
   <div>
-    <span class="badge">{% if deal.discount_percentage %}⚠ −{{ deal.discount_percentage }}% below market average{% else %}Lowest price found{% endif %}</span>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      {% if deal.source == 'ebay' %}
+      <span class="badge" style="background:rgba(228,63,40,.15);color:#e43f28;font-size:13px">eBay</span>
+      {% elif deal.source == 'autodoc' %}
+      <span class="badge" style="background:rgba(59,130,246,.15);color:#3b82f6;font-size:13px">Autodoc</span>
+      {% endif %}
+      {% if deal.discount_percentage %}
+      <span class="badge">−{{ deal.discount_percentage }}% below market average</span>
+      {% endif %}
+      {% if deal.brand_name %}
+      <span class="chip">{{ deal.brand_name }}</span>
+      {% endif %}
+    </div>
+
     <h1 style="font-size:22px;margin:8px 0">{{ deal|disp|car(deal.compatible_models) }}</h1>
 
     <div class="price-big">{{ deal.sale_price|eur }} €</div>
-    <div class="meta">
-      {% if deal.brand_name %}Part maker: <b>{{ deal.brand_name }}</b><br>{% endif %}
+
+    {% if deal.source_url or deal.affiliate_link %}
+    <a class="btn" href="/out/{{ deal.id }}" target="_blank" rel="noopener nofollow sponsored"
+       style="font-size:17px;padding:14px 28px;display:inline-flex;align-items:center;gap:6px;margin-top:6px">
+      View deal on {% if deal.source == 'ebay' %}eBay{% else %}Autodoc{% endif %} ↗
+    </a>
+    {% endif %}
+
+    <div class="meta" style="margin-top:18px">
       {% if deal.part_en %}Part: {{ deal.part_en }}{% if deal.part_de %} ({{ deal.part_de }}){% endif %}<br>{% endif %}
       {% if deal.vehicle_brand %}Listed for: {{ deal.vehicle_brand }}<br>{% endif %}
       {% if deal.average_price %}Market average: <b>{{ deal.average_price|eur }} €</b><br>{% endif %}
       {% if deal.retail_price and deal.retail_price > deal.sale_price %}RRP: {{ deal.retail_price|eur }} €<br>{% endif %}
-      Status: {{ deal.status }} · Clicks: {{ deal.clicks or 0 }}{% if deal.updated_at %} · Seen {{ deal.updated_at[:10] }}{% endif %}<br>
-      Source: {{ deal.product_id }}
+      {% if deal.updated_at %}Last seen: {{ deal.updated_at[:10] }}{% endif %}
+      {% if deal.clicks %} · Clicks: {{ deal.clicks }}{% endif %}
     </div>
 
     {% if deal.compatible_models %}
@@ -32,12 +52,11 @@
     </div>
     {% endif %}
 
-    {% if deal.source_url or deal.affiliate_link %}
-    <a class="btn" href="/out/{{ deal.id }}" target="_blank" rel="noopener nofollow sponsored">View deal ↗</a>
-    {% endif %}
-
-    <div class="label">Telegram format</div>
-    <pre class="preview">{{ message }}</pre>
+    <div class="label">Share</div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <a href="https://twitter.com/intent/tweet?url={{ ('https://trackdeals.eu/deal/' ~ deal.id)|urlencode }}&text={{ deal|disp|urlencode }}" target="_blank" rel="noopener" class="chip" style="text-decoration:none;color:var(--text)">Post on X</a>
+      <a href="https://t.me/share/url?url={{ ('https://trackdeals.eu/deal/' ~ deal.id)|urlencode }}&text={{ deal|disp|urlencode }}" target="_blank" rel="noopener" class="chip" style="text-decoration:none;color:var(--text)">Share on Telegram</a>
+    </div>
   </div>
 </div>
 {% endif %}

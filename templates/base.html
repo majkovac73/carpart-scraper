@@ -3,7 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="{{ og_desc|default('Car part deals from eBay & Autodoc — indexed, filtered, instantly searchable.') }}">
 <meta name="mylead-verification" content="a0dde6e6d60b44ffba66a67a00bdbbc6">
+<meta property="og:title" content="{{ og_title|default('TrackDeals EU') }}">
+<meta property="og:description" content="{{ og_desc|default('Car part deals from eBay & Autodoc — indexed, filtered, instantly searchable.') }}">
+{% if og_image %}<meta property="og:image" content="{{ og_image }}">{% endif %}
+<meta property="og:url" content="{{ og_url|default('https://trackdeals.eu') }}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ og_title|default('TrackDeals EU') }}">
+<meta name="twitter:description" content="{{ og_desc|default('Car part deals from eBay & Autodoc — indexed, filtered, instantly searchable.') }}">
+{% if og_image %}<meta name="twitter:image" content="{{ og_image }}">{% endif %}
 <title>{% block title %}TrackDeals EU – Car Part Deals{% endblock %}</title>
 <style>
   :root{--bg:#0f1115;--card:#1a1e26;--text:#e7e9ee;--muted:#9aa2b1;--accent:#ffca28;--green:#34d399;}
@@ -65,12 +75,11 @@
   </nav>
   {% block content %}{% endblock %}
   <footer>
-    TrackDeals EU · Car part deals · Prices in EUR · Data: Autodoc &amp; eBay
+    TrackDeals EU · Prices in EUR · Data sourced from Autodoc &amp; eBay
     <br>
-    Affiliate disclosure: some links are marked with "↗" and are affiliate
-    links – if you buy after clicking one we may earn a commission from the
-    eBay Partner Network at no extra cost to you. TrackDeals is not affiliated
-    with or endorsed by Autodoc or eBay.
+    Affiliate links: we earn a commission from the eBay Partner Network when you buy via our links – at no extra cost.
+    TrackDeals is not affiliated with or endorsed by Autodoc or eBay.
+    <a href="/about" style="color:var(--accent);margin-left:4px">Full disclosure</a>
   </footer>
 </div>
 {% block scripts %}{% endblock %}
