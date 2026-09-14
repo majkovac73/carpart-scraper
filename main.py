@@ -31,6 +31,7 @@ import os
 import random
 import sys
 import time
+import urllib.request
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -270,12 +271,35 @@ def run_ebay_stage(db, args, stats):
     return saved
 
 
+def _ping_site():
+    """Keeps the Render free-tier app from spinning down by hitting its home
+    page every SITE_PING_INTERVAL_SECONDS. No-op while the interval is 0."""
+    url = os.getenv("SITE_URL", "https://trackdeals.eu")
+    try:
+        with urllib.request.urlopen(url, timeout=120) as resp:
+            status = resp.status
+    except Exception as exc:
+        print(f"  ping {url} FAILED: {exc}")
+        return None
+    print(f"  ping {url} -> {status}")
+    return status
+
+
 def run_daemon(args):
     print("Daemon mode: eBay every %.0fm, Autodoc every %.0fm"
           % (args.ebay_every / 60, args.autodoc_every / 60))
-    next_ebay = next_autodoc = time.time()
+    ping_every = float(os.getenv("SITE_PING_INTERVAL_SECONDS", "1800"))
+    if ping_every <= 0:
+        print("  site ping disabled (SITE_PING_INTERVAL_SECONDS=0)")
+    else:
+        print(f"  pinging {os.getenv('SITE_URL', 'https://trackdeals.eu')} "
+              f"every {ping_every/60:.0f}m to keep Render warm")
+    next_ebay = next_autodoc = next_ping = time.time()
     while True:
         now = time.time()
+        if now >= next_ping and ping_every > 0:
+            _ping_site()
+            next_ping = now + ping_every
         if now >= next_ebay and not args.no_ebay:
             print(f"\n--- [{datetime.now():%H:%M:%S}] eBay sweep ---")
             db = SessionLocal()

@@ -187,7 +187,14 @@ python main.py --autodoc
 python main.py --ebay-all --limit 40
 
 # headless forever-loop: eBay hourly, Autodoc daily, Telegram broadcasts
+#   (+ pings SITE_URL every 30 min so the Render free tier stays warm)
 python -u main.py --daemon --headless --telegram
+
+# check whether the daemon is alive
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Select ProcessId, CommandLine
+#   -> look for a process whose CommandLine contains "main.py --daemon"
+Get-Content daemon.log -Tail 20           # fresh timestamps = alive
+(Get-Item daemon.log).LastWriteTime        # updated within ~2 min = alive
 
 # push pending deals to Telegram / admin X copy
 python telegram_distribute.py                # real send
@@ -197,11 +204,13 @@ python telegram_distribute.py --dry-run      # preview only
 python sync_to_remote.py
 ```
 
-Environment (`.env`, never commit): `EPN_CAMPAIGN_ID`, `AUTODOC_AFFILIATE_URL`,
+Environment (`.env`, never commit): `SITE_URL` (the deployed URL the daemon
+pings to keep Render warm), `EPN_CAMPAIGN_ID`, `AUTODOC_AFFILIATE_URL`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID`,
 `DATABASE_URL` (remote Postgres), `GEMINI_API_KEY`, `ALLOW_LIVE_SCRAPE` (default
 `"0"`), plus the deal thresholds `EBAY_DEAL_MIN_PRICE`, `AUTODOC_DEAL_MIN_PRICE`,
-`DEAL_MIN_SAVED`, `MIN_DISCOUNT`.
+`DEAL_MIN_SAVED`, `MIN_DISCOUNT`, and `SITE_PING_INTERVAL_SECONDS` (default 1800,
+`0` disables the ping).
 
 On Windows the daemon is launched hidden at login via the Startup-folder VBS
 (`daemon_start.cmd` + `daemon_hidden.vbs`, local-only, untracked).
