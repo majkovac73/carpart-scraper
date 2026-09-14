@@ -100,7 +100,8 @@ def _store(db, raw, *, part_de, part_en, source, vehicles=None,
     return is_deal
 
 
-def collect_autodoc_targets(db, limit, min_discount, dry_run, stats, combos):
+def collect_autodoc_targets(db, limit, min_discount, dry_run, stats, combos,
+                            headless=True):
     saved = 0
     for target in combos:
         part = target["part"]
@@ -108,7 +109,8 @@ def collect_autodoc_targets(db, limit, min_discount, dry_run, stats, combos):
         model = target["model"]
         print(f"\n=== Autodoc | {part} | {brand} {model} ===")
         try:
-            raw_deals = search_autodoc_part(part, brand, model, limit=limit)
+            raw_deals = search_autodoc_part(part, brand, model, limit=limit,
+                                            headless=headless)
         except Exception as exc:
             print(f"  ERROR scraping Autodoc: {exc}")
             stats["errors"] += 1
@@ -220,7 +222,7 @@ def print_message(deal):
     print("  ✅ " + format_deal_message(deal).replace("\n", " | "))
 
 
-def run_autodoc_stage(db, args, stats, seed=None):
+def run_autodoc_stage(db, args, stats, seed=None, headless=True):
     if args.no_autodoc:
         return
     rng = random.Random(seed)
@@ -228,7 +230,7 @@ def run_autodoc_stage(db, args, stats, seed=None):
     print(f"Autodoc plan: {len(combos)} combo(s) this run "
           f"({coverage_stats(db)['remaining']} combos left unsearched overall)\n")
     collect_autodoc_targets(db, args.limit, args.min_discount, args.dry_run,
-                            stats, combos)
+                            stats, combos, headless=headless)
 
 
 def run_ebay_stage(db, args, stats):
@@ -268,7 +270,7 @@ def run_daemon(args):
             db = SessionLocal()
             stats = _fresh_stats()
             try:
-                run_autodoc_stage(db, args, stats, seed=None)
+                run_autodoc_stage(db, args, stats, seed=None, headless=args.headless)
                 if args.telegram:
                     _maybe_send_telegram(args.dry_run)
             finally:
@@ -333,6 +335,8 @@ def main():
                         help="loop forever: eBay hourly, Autodoc daily")
     parser.add_argument("--telegram", action="store_true",
                         help="after persisting, broadcast new deals to Telegram")
+    parser.add_argument("--headless", action="store_true",
+                        help="run Autodoc browser in headless mode (for background/daemon)")
     args = parser.parse_args()
 
     print(f"MIN_DISCOUNT = {args.min_discount}%  ({'DRY RUN' if args.dry_run else 'LIVE'})")
@@ -344,7 +348,7 @@ def main():
     db = SessionLocal()
     stats = _fresh_stats()
     try:
-        run_autodoc_stage(db, args, stats, seed=args.seed)
+        run_autodoc_stage(db, args, stats, seed=args.seed, headless=args.headless)
         run_ebay_stage(db, args, stats)
         cov = coverage_stats(db)
     finally:

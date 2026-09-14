@@ -6,3 +6,6 @@ debug/
 .venv/
 venv/
 .neon
+daemon.log
+daemon_smoke.log
+daemon_smoke_err.log
